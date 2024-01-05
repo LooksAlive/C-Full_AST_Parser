@@ -35,6 +35,8 @@ enum TokenType {
     TOK_KW_CASE,
     TOK_KW_DEFAULT,
     TOK_KW_SWITCH,
+    TOK_KW_BREAK,
+    TOK_KW_CONTINUE,
 
 
     TOK_OP_PLUS,
@@ -146,6 +148,8 @@ typedef struct Token {
 #define KW_CASE "case"
 #define KW_DEFAULT "default"
 #define KW_SWITCH "switch"
+#define KW_BREAK "break"
+#define KW_CONTINUE "continue"
 
 #define KW_INLINE "inline"
 

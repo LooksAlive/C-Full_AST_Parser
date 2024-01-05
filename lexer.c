@@ -97,36 +97,54 @@ void isKeyword(const char* content, int* pos, struct Token** tok) {
         strcpy((*tok)->lexeme, KW_ELSE);
     }
     else if (compare_ongoing_stream(content, pos, KW_SWITCH)) {
-            if(content[(*pos)] == '(' || content[(*pos)] == ' ' || content[(*pos)] == '\t' || content[(*pos)] == '{') {
-                (*pos) -= 1;
-            }
-            (*tok)->type = TOK_KW_SWITCH;
-            (*tok)->lexeme = malloc(sizeof(KW_SWITCH));
-            strcpy((*tok)->lexeme, KW_SWITCH);
+        if(content[(*pos)] == '(' || content[(*pos)] == ' ' || content[(*pos)] == '\t' || content[(*pos)] == '{') {
+            (*pos) -= 1;
         }
+        (*tok)->type = TOK_KW_SWITCH;
+        (*tok)->lexeme = malloc(sizeof(KW_SWITCH));
+        strcpy((*tok)->lexeme, KW_SWITCH);
+    }
     else if (compare_ongoing_stream(content, pos, KW_CASE)) {
-            if(content[(*pos)] == '(' || content[(*pos)] == ' ' || content[(*pos)] == '\t' || content[(*pos)] == '{') {
-                (*pos) -= 1;
-            }
-            (*tok)->type = TOK_KW_CASE;
-            (*tok)->lexeme = malloc(sizeof(KW_CASE));
-            strcpy((*tok)->lexeme, KW_CASE);
+        if(content[(*pos)] == '(' || content[(*pos)] == ' ' || content[(*pos)] == '\t' || content[(*pos)] == '{') {
+            (*pos) -= 1;
         }
+        (*tok)->type = TOK_KW_CASE;
+        (*tok)->lexeme = malloc(sizeof(KW_CASE));
+        strcpy((*tok)->lexeme, KW_CASE);
+    }
     else if (compare_ongoing_stream(content, pos, KW_DEFAULT)) {
-            if(content[(*pos)] == '(' || content[(*pos)] == ' ' || content[(*pos)] == '\t' || content[(*pos)] == '{') {
-                (*pos) -= 1;
-            }
-            (*tok)->type = TOK_KW_DEFAULT;
-            (*tok)->lexeme = malloc(sizeof(KW_DEFAULT));
-            strcpy((*tok)->lexeme, KW_DEFAULT);
-        }else if (compare_ongoing_stream(content, pos, KW_WHILE)) {
+        if(content[(*pos)] == '(' || content[(*pos)] == ' ' || content[(*pos)] == '\t' || content[(*pos)] == '{' || content[(*pos)] == ':') {
+            (*pos) -= 1;
+        }
+        (*tok)->type = TOK_KW_DEFAULT;
+        (*tok)->lexeme = malloc(sizeof(KW_DEFAULT));
+        strcpy((*tok)->lexeme, KW_DEFAULT);
+    }
+    else if (compare_ongoing_stream(content, pos, KW_WHILE)) {
         if(content[(*pos)] == '(' || content[(*pos)] == ' ' || content[(*pos)] == '\t' || content[(*pos)] == '{') {
             (*pos) -= 1;
         }
         (*tok)->type = TOK_KW_WHILE;
         (*tok)->lexeme = malloc(sizeof(KW_WHILE));
         strcpy((*tok)->lexeme, KW_WHILE);
-    } else if (compare_ongoing_stream(content, pos, KW_FOR)) {
+    }
+    else if (compare_ongoing_stream(content, pos, KW_BREAK)) {
+        if(content[(*pos)] == '(' || content[(*pos)] == ' ' || content[(*pos)] == '\t' || content[(*pos)] == '{') {
+            (*pos) -= 1;
+        }
+        (*tok)->type = TOK_KW_BREAK;
+        (*tok)->lexeme = malloc(sizeof(KW_BREAK));
+        strcpy((*tok)->lexeme, KW_BREAK);
+    }
+    else if (compare_ongoing_stream(content, pos, KW_CONTINUE)) {
+        if(content[(*pos)] == '(' || content[(*pos)] == ' ' || content[(*pos)] == '\t' || content[(*pos)] == '{') {
+            (*pos) -= 1;
+        }
+        (*tok)->type = TOK_KW_CONTINUE;
+        (*tok)->lexeme = malloc(sizeof(KW_CONTINUE));
+        strcpy((*tok)->lexeme, KW_CONTINUE);
+    }
+    else if (compare_ongoing_stream(content, pos, KW_FOR)) {
         if(content[(*pos)] == '(' || content[(*pos)] == ' ' || content[(*pos)] == '\t' || content[(*pos)] == '{') {
             (*pos) -= 1;
         }
@@ -500,7 +518,7 @@ void isOperator(const char* content, char c, int* pos, struct Token** tok) {
 }
 
 // Function to check if a character is a punctuation mark
-struct Token* isPunctuation(char c, struct Token** tok) {
+void isPunctuation(const char c, struct Token** tok) {
     (*tok)->lexeme = malloc(2);
     switch (c) {
         case '(':
@@ -558,9 +576,11 @@ struct Token* isPunctuation(char c, struct Token** tok) {
         case ':':
             (*tok)->type = TOK_PUNCT_COLON;
             strcpy((*tok)->lexeme, PUNCT_COLON);
+            break;
         case '?':
             (*tok)->type = TOK_PUNCT_QUESTIONMARK;
             strcpy((*tok)->lexeme, PUNCT_QUESTIONMARK);
+            break;
             /*
         case '\n':
             (*tok)->type = TOK_PUNCT_NEWLINE;

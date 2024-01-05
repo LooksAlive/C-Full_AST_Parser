@@ -7,6 +7,8 @@ set(CMAKE_C_COMPILER "/usr/bin/gcc")
 set(CMAKE_C_FLAGS "-g -O0")
 
 
+
+
 set (SOURCES
     main.h
     ast_dumper.h
@@ -17,3 +19,5 @@ set (SOURCES
 
 
 add_executable(C_P_I main.c ${SOURCES})
+
+target_link_libraries(C_P_I json-c)

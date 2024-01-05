@@ -8,6 +8,7 @@
 #include "generic_vector.h"
 #include "lexer.h"
 
+
 void jumpOverNewLines(struct Token*** tokens, int* num_tokens, int* tokenIndex) {
     for(int*i = tokenIndex; (*tokens)[(*tokenIndex)]->type == TOK_PUNCT_NEWLINE; (*i)++) {
         (*i)++;
@@ -186,7 +187,7 @@ void add_type_spec_to_list(const char* name /* if typedefname */, enum TypeSpeci
         //(*list) = (*list)->next;
     }
     else {
-        struct TypeSpecList* type_name_list_next = malloc(sizeof(TypeSpecList));
+        struct TypeSpecList* type_name_list_next = malloc(sizeof(struct TypeSpecList));
         type_name_list_next->id = id;
         type_name_list_next->type_spec = typespec;
         type_name_list_next->next = NULL;
@@ -274,6 +275,26 @@ enum FunctionSpecifier_ isFunctionSpecifier(const Token* tok) {
     }
 }
 
+struct Identifier* isTypedefName(const Token** tok, const struct MacrosAndTypeDefNames** macros_and_tpd_names) {
+    for(int i = 0; i < (*macros_and_tpd_names)->typedefnames_size; i++) {
+        if(strcmp((*tok)->lexeme, (*macros_and_tpd_names)->typedefnames[i]) == 0) {
+            return init_identifier((*tok)->lexeme);
+        }
+    }
+
+    return NULL;
+}
+
+struct Identifier* isMacroName(Token** tok, const struct MacrosAndTypeDefNames** macros_and_tpd_names) {
+    for(int i = 0; i < (*macros_and_tpd_names)->macros_size; i++) {
+        if(strcmp((*tok)->lexeme, (*macros_and_tpd_names)->macros[i]) == 0) {
+            return init_identifier((*tok)->lexeme);
+        }
+    }
+
+    return NULL;
+}
+
 // stops at any punct that does not belong to grammar
 // @param fromTypeDef ->
 struct Type* parseType(struct Token*** tokens, int* num_tokens, int* tokenIndex, bool fromTypeDef) {
@@ -314,15 +335,65 @@ struct Type* parseType(struct Token*** tokens, int* num_tokens, int* tokenIndex,
                 base_type->num_op += 1;
                 (*tokenIndex)++;
             }
-            int xx = 0;
+            // Handle pointer type
+            base_type->pointer_type_qualifier = isQuatType((*tokens)[*tokenIndex]);
+            if(base_type->pointer_type_qualifier) { (*tokenIndex)++; };
         }
         else if((*tokens)[*tokenIndex]->type == TOK_OP_AND) {
             base_type->op = MemoryOperator_REFERENCE;
-            (*tokenIndex)++;
+            while((*tokens)[*tokenIndex]->type == TOK_OP_AND) {
+                base_type->num_op += 1;
+                (*tokenIndex)++;
+            }
         }
         else if((*tokens)[*tokenIndex]->type == TOK_STRING) {
+            //Identifier*id = isTypedefName();
+            return type;
+        }
+        else if((*tokens)[*tokenIndex]->type == TOK_PUNCT_CLOSE_PAREN) {
             //isTypedefName();
             return type;
+        }
+        else if ((*tokens)[*tokenIndex]->type == TOK_PUNCT_OPEN_BRACKET) {
+            // Handle array type
+            struct ArrayType* array_type = malloc(sizeof(struct ArrayType));
+            array_type->base_type = base_type;
+            array_type->bracket_statement = NULL;
+            array_type->initializer = NULL;  // Initialize to NULL, you can update this based on your requirements
+
+            // Parse array size (if specified)
+            (*tokenIndex)++;
+
+            /*
+            if ((*tokens)[*tokenIndex]->type == TOK_INTEGER) {
+                array_type->size = atoi((*tokens)[*tokenIndex]->lexeme);
+                (*tokenIndex)++;
+            } else if ((*tokens)[*tokenIndex]->type == TOK_STRING) {
+                // Check if the size is specified as a macro
+                struct Identifier* macroIdentifier = isMacroName(&(*tokens)[*tokenIndex], NULL);
+                if (macroIdentifier != NULL) {
+                    // Handle macro-based size (you might want to replace this with your macro resolution logic)
+                    //array_type->size = resolveMacro(macroIdentifier); // Replace with your macro resolution logic
+                    (*tokenIndex)++;
+                } else {
+                    fprintf(stderr, "Error: Expected a constant integer or macro for array size\n");
+                    // Handle error as needed
+                }
+                */
+
+            array_type->bracket_statement = parseStatement(tokens, num_tokens, tokenIndex);
+
+            // Parse the closing bracket
+            if ((*tokens)[*tokenIndex]->type == TOK_PUNCT_CLOSE_BRACKET) {
+                (*tokenIndex)++;
+            } else {
+                fprintf(stderr, "Error: Expected ']' in array type\n");
+                // Handle error as needed
+            }
+
+            // Update the type to be an array type
+            type->ttype = TYPE_ARRAY;
+            type->type.array_type = array_type;
         }
         else {
             fprintf(stderr, "ERROR IN PARSING TYPE !!!");
@@ -460,9 +531,9 @@ struct StructOrUnion* parseStructOrUnion(struct Token*** tokens, int* num_tokens
     return s_or_u;
 }
 
-struct TypeDef* parseTypeDef(struct Token*** tokens, int* num_tokens, int* tokenIndex) {
+struct TypeDefName* parseTypeDef(struct Token*** tokens, int* num_tokens, int* tokenIndex) {
     jumpOverNewLines(tokens, num_tokens, tokenIndex);
-    struct TypeDef* td = malloc(sizeof(struct TypeDef*));
+    struct TypeDef* td = malloc(sizeof(struct TypeDef));
 
     if((*tokens)[(*tokenIndex)]->type == TOK_KW_STRUCT) {
         td->t_or_soru = Typedef_StructOrEnum;
@@ -522,11 +593,14 @@ struct SizeOf* parseSizeOf(struct Token*** tokens, int* num_tokens, int* tokenIn
     jumpOverNewLines(tokens, num_tokens, tokenIndex);
     if((*tokens)[(*tokenIndex)]->type == TOK_PUNCT_OPEN_PAREN) { (*tokenIndex)++; };
 
-    struct SizeOf* sz_of = malloc(sizeof(struct SizeOf*));
+    struct SizeOf* sz_of = malloc(sizeof(struct SizeOf));
 
     sz_of->type = parseType(tokens, num_tokens, tokenIndex, false);
 
-    if((*tokens)[(*tokenIndex)+1]->type == TOK_PUNCT_CLOSE_PAREN) {
+    if((*tokens)[(*tokenIndex)]->type == TOK_PUNCT_CLOSE_PAREN) {
+        (*tokenIndex)++;
+    }
+    if((*tokens)[(*tokenIndex)]->type == TOK_PUNCT_SEMICOLON) {
         (*tokenIndex)++;
     }
 
@@ -535,7 +609,7 @@ struct SizeOf* parseSizeOf(struct Token*** tokens, int* num_tokens, int* tokenIn
 }
 
 struct IfDef* parseIfDef(struct Token*** tokens, int* num_tokens, int* tokenIndex) {
-    struct IfDef* ifdef = malloc(sizeof(struct IfDef*));
+    struct IfDef* ifdef = malloc(sizeof(struct IfDef));
 
     if((*tokens)[(*tokenIndex)+1]->type == TOK_STRING) {
         ifdef->id = init_identifier((*tokens)[(*tokenIndex)+1]->lexeme);
@@ -562,7 +636,7 @@ struct IfDef* parseIfDef(struct Token*** tokens, int* num_tokens, int* tokenInde
 }
 
 struct IfnDef* parseIfnDef(struct Token*** tokens, int* num_tokens, int* tokenIndex) {
-    struct IfnDef* ifndef = malloc(sizeof(struct IfnDef*));
+    struct IfnDef* ifndef = malloc(sizeof(struct IfnDef));
 
     if((*tokens)[(*tokenIndex)+1]->type == TOK_STRING) {
         ifndef->id = init_identifier((*tokens)[(*tokenIndex)+1]->lexeme);
@@ -631,16 +705,6 @@ struct Comment* parseComment(struct Token*** tokens, int* num_tokens, int* token
     printf("Comment: %s", comment);
 
     return cmnt;
-}
-
-struct Identifier* isTypedefName(const Token tok, const struct MacrosAndTypeDefNames** macros_and_tpd_names) {
-    for(int i=0; i< (*macros_and_tpd_names)->typedefnames_size; i++) {
-        if(strcmp(tok.lexeme, (*macros_and_tpd_names)->typedefnames[i]) == 0) {
-            return init_identifier(tok.lexeme);
-        }
-    }
-
-    return NULL;
 }
 
 struct ParamDecl** parseParams(struct Token*** tokens, int* num_tokens, int* tokenIndex, int* ParamDeclSize) {
@@ -788,6 +852,7 @@ enum CompareOperation_ isCompareOperation(struct Token*** tokens, int* num_token
 enum ExpressionFlag_ {
     ExpressionFlag_NONE,
     ExpressionFlag_EnumElement,
+    ExpressionFlag_SWITCH_CASE,
 
 };
 
@@ -854,6 +919,31 @@ struct Statement* parseExpression(struct Token*** tokens, int* num_tokens, int* 
             stmt->stmt_type = Stmt_Identifier;
             stmt->stmt = id;
             (*tokenIndex)++;
+        }
+        else if((*tokens)[*tokenIndex]->type == TOK_PUNCT_COLON) {
+            stmt->stmt_type = Stmt_Identifier;
+            stmt->stmt = id;
+            if(expr_flag == ExpressionFlag_SWITCH_CASE) {}
+            else {
+                (*tokenIndex)++;
+            }
+        }
+        // from end of call )
+        else if((*tokens)[*tokenIndex]->type == TOK_PUNCT_CLOSE_PAREN) {
+            stmt->stmt_type = Stmt_Identifier;
+            stmt->stmt = id;
+            if(expr_flag == ExpressionFlag_SWITCH_CASE) {}
+            else {
+                //(*tokenIndex)++;
+            }
+        }
+        else if((*tokens)[*tokenIndex]->type == TOK_PUNCT_CLOSE_BRACE) {
+            stmt->stmt_type = Stmt_Identifier;
+            stmt->stmt = id;
+            if(expr_flag == ExpressionFlag_SWITCH_CASE) {}
+            else {
+                //(*tokenIndex)++;
+            }
         }
     }
     else if((*tokens)[*tokenIndex]->type == TOK_PUNCT_OPEN_PAREN) {
@@ -981,24 +1071,25 @@ struct Statement* parseExpression(struct Token*** tokens, int* num_tokens, int* 
 struct SwitchCase* parseSwitchCase(struct Token*** tokens, int* num_tokens, int* tokenIndex) {
     struct SwitchCase* swc = malloc(sizeof(struct SwitchCase));
     swc->bcount = 0;
+    swc->body = NULL;
 
-    swc->condition = parseExpression(tokens, num_tokens, tokenIndex, ExpressionFlag_NONE);
+    swc->condition = parseExpression(tokens, num_tokens, tokenIndex, ExpressionFlag_SWITCH_CASE);
 
     if((*tokens)[*tokenIndex]->type == TOK_PUNCT_COLON) {
         (*tokenIndex)++;
     }
 
-    while((*tokens)[*tokenIndex]->type != TOK_PUNCT_CLOSE_BRACE) {
+    while((*tokens)[*tokenIndex]->type != TOK_KW_DEFAULT) {
         struct Statement* s = parseStatement(tokens, num_tokens, tokenIndex);
         swc->body = realloc(swc->body, sizeof(struct Statement*) * (swc->bcount + 1));
         swc->body[swc->bcount] = s;
-        swc->body++;
+        swc->bcount++;
 
         if(*tokenIndex >= *num_tokens) {
             break;
         }
     }
-    (*tokenIndex)++; // }
+    //(*tokenIndex)++; // }
 
     return swc;
 }
@@ -1011,11 +1102,11 @@ struct SwitchDefault* parseSwitchDefault(struct Token*** tokens, int* num_tokens
         (*tokenIndex)++;
     }
 
-    while((*tokens)[*tokenIndex]->type != TOK_KW_CASE && (*tokens)[*tokenIndex]->type != TOK_KW_DEFAULT) {
+    while((*tokens)[*tokenIndex]->type != TOK_PUNCT_CLOSE_BRACE) {
         struct Statement* s = parseStatement(tokens, num_tokens, tokenIndex);
         swd->body = realloc(swd->body, sizeof(struct Statement*) * (swd->bcount + 1));
         swd->body[swd->bcount] = s;
-        swd->body++;
+        swd->bcount++;
 
         if(*tokenIndex >= *num_tokens) {
             break;
@@ -1036,11 +1127,15 @@ struct Switch* parseSwitch(struct Token*** tokens, int* num_tokens, int* tokenIn
 
     sw->condition = parseExpression(tokens, num_tokens, tokenIndex, ExpressionFlag_NONE);
 
+    if((*tokens)[*tokenIndex]->type == TOK_PUNCT_CLOSE_PAREN) {
+        (*tokenIndex)++;
+    }
+
     /* body */
     if((*tokens)[*tokenIndex]->type == TOK_PUNCT_OPEN_BRACE) {
         (*tokenIndex)++;
     }
-    while((*tokens)[*tokenIndex]->type != TOK_PUNCT_CLOSE_BRACE) {
+    while(1) {
         if((*tokens)[*tokenIndex]->type == TOK_KW_CASE) {
             (*tokenIndex)++; // jump [case]
             struct SwitchCase* s = parseSwitchCase(tokens, num_tokens, tokenIndex);
@@ -1049,7 +1144,9 @@ struct Switch* parseSwitch(struct Token*** tokens, int* num_tokens, int* tokenIn
             sw->bccount++;
         }
         else if((*tokens)[*tokenIndex]->type == TOK_KW_DEFAULT) {
+            (*tokenIndex)++; // default, parseSwitchDefault() jump over last }
             sw->default_case = parseSwitchDefault(tokens, num_tokens, tokenIndex);
+            break;
         }
         else {
             fprintf(stderr, "ERROR IN SWITCH - should not be hut.");
@@ -1059,10 +1156,31 @@ struct Switch* parseSwitch(struct Token*** tokens, int* num_tokens, int* tokenIn
             break;
         }
     }
-    (*tokenIndex)++; // }
+    //(*tokenIndex)++; // }
+    struct Token* tok = (*tokens)[*tokenIndex];
 
 
     return sw;
+}
+
+struct Break* parseBreak(struct Token*** tokens, int* num_tokens, int* tokenIndex) {
+    struct Break* b = malloc(sizeof(struct Break));
+
+    if((*tokens)[*tokenIndex]->type == TOK_PUNCT_SEMICOLON) {
+        (*tokenIndex)++;
+    }
+
+    return b;
+}
+
+struct Continue* parseContinue(struct Token*** tokens, int* num_tokens, int* tokenIndex) {
+    struct Continue* c = malloc(sizeof(struct Continue));
+
+    if((*tokens)[*tokenIndex]->type == TOK_PUNCT_SEMICOLON) {
+        (*tokenIndex)++;
+    }
+
+    return c;
 }
 
 // enum kw is jumped over.
@@ -1285,6 +1403,24 @@ struct Statement* parseStatement(struct Token*** tokens, int* num_tokens, int* t
         stmt->stmt = parseSizeOf(tokens, num_tokens, tokenIndex);
         stmt->stmt_type = Stmt_SizeOf;
     }
+    else if(current_token->type == TOK_KW_SWITCH) {
+        (*tokenIndex)++;
+        // TODO: parse with only type flag.
+        stmt->stmt = parseSwitch(tokens, num_tokens, tokenIndex);
+        stmt->stmt_type = Stmt_Switch;
+    }
+    else if(current_token->type == TOK_KW_BREAK) {
+        (*tokenIndex)++;
+        // TODO: parse with only type flag.
+        stmt->stmt = parseBreak(tokens, num_tokens, tokenIndex);
+        stmt->stmt_type = Stmt_Break;
+    }
+    else if(current_token->type == TOK_KW_CONTINUE) {
+        (*tokenIndex)++;
+        // TODO: parse with only type flag.
+        stmt->stmt = parseContinue(tokens, num_tokens, tokenIndex);
+        stmt->stmt_type = Stmt_Continue;
+    }
     else if(current_token->type == TOK_OP_DIVIDE) {
         if((*tokens)[(*tokenIndex)+1]->type == TOK_OP_DIVIDE) {
             parseComment(tokens, num_tokens, tokenIndex, true);
@@ -1317,10 +1453,13 @@ struct TranslationUnit* parseTranslationUnit(struct Token*** tokens, int* num_to
     int tokenIndex = 0;
     while (1) {
         struct Statement* stmt = parseStatement(tokens, num_tokens, &tokenIndex);
-        if(stmt) {
+        if(stmt != NULL && stmt->stmt != NULL) {
             TU->body = realloc(TU->body, sizeof(struct Statement*) * (TU->count + 1));
-            TU->body[TU->count++] = stmt;
+            TU->body[TU->count] = stmt;
             TU->count++;
+        }
+        else {
+            fprintf(stderr, "parseTranslationUnit() smtm is NULL");
         }
         if(tokenIndex >= *num_tokens) {
             break;
@@ -1357,7 +1496,7 @@ int main() {
     //char* content = readFile("/home/adam/Plocha/C_PARSER_INTERPRETER/C_P_I/main.c");
     //printf("%s", content);
 
-    const char* content = "mycall(a,b,c,d,e); enum X {asdf, dasjf, adsfds,dsaf}; typedef struct XXX {char c;} XXX; typedef const int* XX; struct X {int a;}; const int f(const int** b, signed char& c);\n";
+    const char* content = "const signed int xxx; \nswitch(mycall(a,b)){case xxx: int a;break; default: int b; break;} sizeof(int); \nmycall(a,b,c,d,e); enum X {asdf, dasjf, adsfds,dsaf}; typedef struct XXX {char c;} XXX; typedef const int* XX; struct X {int a;}; const int f(const int** b, signed char& c);\n";
     //struct Token* tokens = lex(input);
 
     lex(content, &num_tokens, &tokenIndex, &tokens);
@@ -1390,7 +1529,7 @@ int main() {
 
     free(tokens);
 
-    //printTranslationUnitJson(TU, 4);
+    printTranslationUnitJson(TU);
 
     //freeTranslationUnit(&TU);
     //free(TU);

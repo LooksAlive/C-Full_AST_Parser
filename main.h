@@ -177,7 +177,7 @@ struct Include {
 enum BuiltinType_ {
     BuiltinType_INT,
     BuiltinType_CHAR,
-    BuiltinType_STRING, // char*
+    BuiltinType_STRING, // char* e.g. "xxxxx"
     BuiltinType_CHAR_PTR,
     BuiltinType_DOUBLE,
     BuiltinType_FLOAT,
@@ -191,6 +191,7 @@ struct Constant {
 
 
 enum Statement_ {
+    Stmt_NONE,
     Stmt_Identifier,
     Stmt_Symbol,
     Stmt_Call,
@@ -380,12 +381,9 @@ struct BaseType {
     enum MemoryOperator_ op;
     unsigned short num_op;
 
-} BaseType;
+    enum QualType_ pointer_type_qualifier;
 
-struct PointerType {
-    struct Type* base_type;
-    unsigned qualtype_flags;
-} PointerType;
+} BaseType;
 
 // Forward declaration for recursive structure
 struct InitializerList;
@@ -429,9 +427,8 @@ struct Designator {
 } Designator;
 
 struct ArrayType {
-    struct Type* base_type;
-    unsigned size;
-    unsigned qualtype_flags;
+    struct BaseType* base_type;
+    struct Statement* bracket_statement; // constant | macro->constant | NULL
     struct InitializerList* initializer; // Add this field
 } ArrayType;
 
@@ -452,7 +449,6 @@ struct Type {
     enum Type_ ttype;
     union {
         struct BaseType* base_type;
-        struct PointerType* pointer_type;
         struct ArrayType* array_type;
         struct FunctionPtrType* function_ptr_type;
     } type;
@@ -585,6 +581,7 @@ struct StructOrUnion {
     struct Statement** body;
     unsigned bcount;
 } StructOrUnion;
+
 struct TypeDef {
     //struct Position* pos;
     struct Identifier* id; // typedef int [myint]    --- in struct_or_union it is NULL
@@ -593,7 +590,9 @@ struct TypeDef {
         struct Type* targetType;      // For simple types
         struct StructOrUnion* structOrUnionType; // For structs or unions
     } typedef_type;
-} Typedef;
+};
+
+
 
 struct SizeOf {
     struct Type* type;
